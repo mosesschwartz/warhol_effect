@@ -1,6 +1,5 @@
 import Image
 import numpy as np
-import colorsys
 
 '''colors here are taken directly from Warhol's Che Guevara serigraph
 (in order left to right, top to bottom)'''
@@ -67,20 +66,6 @@ def color_bg_fg(image, bg_color, fg_color):
     masked_image = Image.composite(fg_layer, bg_layer, image)
     return masked_image
 
-def color_to_color(image, src_color, dest_color, distance):
-    '''change all colors close to src_color to be dest_color. 
-    distance defines how close the color values have to be (from 0 to 255)'''
-    arr=np.array(np.asarray(image))
-    sr, sg, sb, sa = src_color # sr => source red, and so on
-    r,g,b,a=np.rollaxis(arr,axis=-1)    
-    mask=(  (np.abs(r-sr) <= distance)
-          & (np.abs(g-sg) <= distance)
-          & (np.abs(b-sb) <= distance)
-          )
-    arr[mask]=dest_color
-    image=Image.fromarray(arr,mode='RGBA')
-    return image
-
 def white_to_color(image, color):
     '''change all colors close to white and non-transparent
     (alpha > 0) to be color.'''
@@ -100,19 +85,28 @@ def white_to_color(image, color):
     image=Image.fromarray(arr,mode='RGBA')
     return image
 
-def make_warhol_single(image, bg_color, fg_color, skin_color, 
-                       skin_src_color, skin_dist):
-    '''create a single warhol-serigraph-style'''
+def make_warhol_single_example(image, bg_color, fg_color, skin_color):
+    '''create a single warhol-serigraph-style image and save each intermediate
+    step to the example/ directory'''
     bg_fg_layer = color_bg_fg(image, bg_color, fg_color)
     bg_fg_layer.save('example/0-bg_fg_layer.png')
     temp_dark_image = darken_bg(image, (0,0,0,255))
     temp_dark_image.save('example/1-temp_dark_image.png')
-    skin_mask = color_to_color(temp_dark_image,skin_src_color,(0,0,0,0),skin_dist)
+    skin_mask = white_to_color(temp_dark_image,(0,0,0,0))
     skin_mask.save('example/2-skin_mask.png')
     skin_layer = Image.new('RGBA', image.size, skin_color) 
     skin_layer.save('example/3-skin_layer.png')
     out = Image.composite(bg_fg_layer, skin_layer, skin_mask)
     out.save('example/4-out.png')
+    return out
+
+def make_warhol_single(image, bg_color, fg_color, skin_color):
+    '''create a single warhol-serigraph-style image'''
+    bg_fg_layer = color_bg_fg(image, bg_color, fg_color)
+    temp_dark_image = darken_bg(image, (0,0,0,255))
+    skin_mask = white_to_color(temp_dark_image,(0,0,0,0))
+    skin_layer = Image.new('RGBA', image.size, skin_color) 
+    out = Image.composite(bg_fg_layer, skin_layer, skin_mask)
     return out
 
 def test_warhol(image_file):
@@ -124,9 +118,7 @@ def test_warhol(image_file):
     skin = color['skin']
     make_warhol_single(im, bg, fg, skin).show()
 
-#(255,205,132,255)
-
-def warholify(image_file, skin_src_color, distance):
+def warholify(image_file):
     im = Image.open(image_file).convert('RGBA')
 
     warhols = []
@@ -134,8 +126,7 @@ def warholify(image_file, skin_src_color, distance):
         bg = colors['bg']
         fg = colors['fg']
         skin = colors['skin']
-        warhols.append(make_warhol_single(im, bg, fg, skin, 
-                       skin_src_color, distance))
+        warhols.append(make_warhol_single(im, bg, fg, skin))
 
     x = im.size[0]
     y = im.size[1]
@@ -151,5 +142,15 @@ def warholify(image_file, skin_src_color, distance):
     blank_image.paste(warhols[7], (x,y*2))
     blank_image.paste(warhols[8], (x*2,y*2))
 
-    blank_image.save('nine_weasels.png')
+    blank_image.save('out.png')
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Find embedded checksums.')
+    parser.add_argument('-f', '--file', required=True,
+                    help='File to warholify')
+
+    args = parser.parse_args()
+    warholify(args.file)
 
